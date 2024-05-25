@@ -9,8 +9,12 @@ import (
 )
 
 const (
-	HTTP_OK        = "HTTP/1.1 200 OK\r\n"
-	HTTP_NOT_FOUND = "HTTP/1.1 404 Not Found\r\n"
+	// response type
+	httpOk       = "HTTP/1.1 200 OK\r\n"
+	httpNotFound = "HTTP/1.1 404 Not Found\r\n"
+	// headers
+	headerCTypeTextPlain = "Content-Type: text/plain\r\n"
+	headerCTypeLength    = "Content-Length: "
 )
 
 func main() {
@@ -43,8 +47,15 @@ func main() {
 
 	path := strings.Split(req_segments[0], " ")[1]
 	if path == "/" {
-		conn.Write([]byte(HTTP_OK + "\r\n"))
+		_, err = conn.Write([]byte(httpOk + "\r\n"))
+	} else if path[0:6] == "/echo/" {
+		body := path[6:]
+		_, err = conn.Write([]byte(fmt.Sprintf("%s%s%s%d\r\n\r\n%s", httpOk, headerCTypeTextPlain, headerCTypeLength, len(body), body)))
 	} else {
-		conn.Write([]byte(HTTP_NOT_FOUND + "\r\n"))
+		_, err = conn.Write([]byte(httpNotFound + "\r\n"))
+	}
+	if err != nil {
+		fmt.Println("Error writing to connection: ", err.Error())
+		os.Exit(1)
 	}
 }
