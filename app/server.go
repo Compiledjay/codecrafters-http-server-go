@@ -2,20 +2,23 @@ package main
 
 import (
 	"fmt"
-	// Uncomment this block to pass the first stage
 	"net"
 	"os"
+	"slices"
+	"strings"
+)
+
+const (
+	HTTP_OK        = "HTTP/1.1 200 OK\r\n"
+	HTTP_NOT_FOUND = "HTTP/1.1 404 Not Found\r\n"
 )
 
 func main() {
-	// You can use print statements as follows for debugging, they'll be visible when running tests.
 	fmt.Println("Logs from your program will appear here!")
-
-	// Uncomment this block to pass the first stage
 
 	l, err := net.Listen("tcp", "0.0.0.0:4221")
 	if err != nil {
-		fmt.Println("Failed to bind to port 4221")
+		fmt.Println("Failed to bind to port 4221", err.Error())
 		os.Exit(1)
 	}
 
@@ -25,5 +28,23 @@ func main() {
 		os.Exit(1)
 	}
 
-	conn.Write([]byte("HTTP/1.1 200 OK\r\n\r\n"))
+	buffer := make([]byte, 1024)
+	n, err := conn.Read(buffer)
+	if err != nil {
+		fmt.Println("Error reading from connection: ", err.Error())
+		os.Exit(1)
+	}
+
+	request := string(buffer[:n])
+	req_segments := strings.Split(request, "\r\n")
+	req_segments = slices.DeleteFunc(req_segments, func(s string) bool {
+		return s == ""
+	})
+
+	path := strings.Split(req_segments[0], " ")[1]
+	if path == "/" {
+		conn.Write([]byte(HTTP_OK + "\r\n"))
+	} else {
+		conn.Write([]byte(HTTP_NOT_FOUND + "\r\n"))
+	}
 }
