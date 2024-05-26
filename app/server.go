@@ -89,6 +89,26 @@ func createResponse(r *httpRequest) string {
 	}
 }
 
+func manageConnection(conn net.Conn) {
+	buffer := make([]byte, 1024)
+	n, err := conn.Read(buffer)
+	if err != nil {
+		fmt.Println("Error reading from connection: ", err.Error())
+		os.Exit(1)
+	}
+
+	request, err := parseRequest(string(buffer[:n]))
+	if err != nil {
+		fmt.Println("Error parsing request: ", err.Error())
+	}
+
+	response := createResponse(request)
+	fmt.Println(response)
+	fmt.Println([]byte(response))
+	conn.Write([]byte(response))
+	conn.Close()
+}
+
 func main() {
 	fmt.Println("Logs from your program will appear here!")
 
@@ -105,22 +125,6 @@ func main() {
 			fmt.Println("Error accepting connection: ", err.Error())
 			os.Exit(1)
 		}
-
-		buffer := make([]byte, 1024)
-		n, err := conn.Read(buffer)
-		if err != nil {
-			fmt.Println("Error reading from connection: ", err.Error())
-			os.Exit(1)
-		}
-
-		request, err := parseRequest(string(buffer[:n]))
-		if err != nil {
-			fmt.Println("Error parsing request: ", err.Error())
-		}
-
-		response := createResponse(request)
-		fmt.Println(response)
-		fmt.Println([]byte(response))
-		conn.Write([]byte(response))
+		go manageConnection(conn)
 	}
 }
