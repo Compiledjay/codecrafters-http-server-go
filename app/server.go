@@ -1,10 +1,10 @@
 package main
 
 import (
+	"bufio"
 	"fmt"
 	"net"
 	"os"
-	"slices"
 	"strings"
 )
 
@@ -13,8 +13,9 @@ const (
 	Response200 = "HTTP/1.1 200 OK\r\n"
 	Response404 = "HTTP/1.1 404 Not Found\r\n"
 	// headers
-	ContentTextPlain = "Content-Type: text/plain\r\n"
-	ContentLength    = "Content-Length: "
+	ContentTextPlain      = "Content-Type: text/plain\r\n"
+	ContentAppOctetStream = "Content-Type: application/octet-stream\r\n"
+	ContentLength         = "Content-Length: "
 )
 
 type httpRequest struct {
@@ -54,39 +55,44 @@ func parseRequest(req string) (*httpRequest, error) {
 }
 
 func createResponse(r *httpRequest) string {
-	var validRequest = func(path string, allowedRequests []string) bool {
-		if path == "/" {
-			return true
-		}
-
-		splitPath := strings.Split(path, "/")
-		partsPath := slices.DeleteFunc(splitPath, func(s string) bool {
-			return s == ""
-		})
-
-		p := partsPath[0]
-		for _, v := range allowedRequests {
-			if strings.EqualFold(p, v) {
-				return true
-			}
-		}
-		return false
-	}
-	allowedRequests := []string{"echo", "user-agent"}
-
-	if !validRequest(r.path, allowedRequests) {
-		return fmt.Sprintf("%s\r\n", Response404)
-	} else if r.path == "/" {
-		return fmt.Sprintf("%s\r\n", Response200)
-	} else if r.path == "/user-agent" {
+	response := ""
+	switch p := strings.Split(r.path, "/")[1]; p {
+	case "":
+		response = fmt.Sprintf("%s\r\n", Response200)
+	case "echo":
+		splitReq := strings.SplitN(r.path, "/", 3)
+		body := splitReq[2]
+		response = fmt.Sprintf("%s%s%s%d\r\n\r\n%s", Response200, ContentTextPlain, ContentLength, len(body), body)
+	case "user-agent":
 		body := r.headers["user-agent"]
 		body = strings.Trim(body, "\r\n")
-		return fmt.Sprintf("%s%s%s%d\r\n\r\n%s", Response200, ContentTextPlain, ContentLength, len(body), body)
-	} else {
-		echo := strings.Split(r.path, "/")
-		body := echo[len(echo)-1]
-		return fmt.Sprintf("%s%s%s%d\r\n\r\n%s", Response200, ContentTextPlain, ContentLength, len(body), body)
+		response = fmt.Sprintf("%s%s%s%d\r\n\r\n%s", Response200, ContentTextPlain, ContentLength, len(body), body)
+	case "files":
+		if len(os.Args) < 3 {
+			response = fmt.Sprintf("%s\r\n", Response404)
+			break
+		}
+		dir := os.Args[2]
+		splitReq := strings.Split(r.path, "/")
+		fileName := splitReq[2]
+		file, err := os.Open(dir + fileName)
+		if err != nil {
+			response = fmt.Sprintf("%s\r\n", Response404)
+			break
+		}
+		defer file.Close()
+
+		body := ""
+		scanner := bufio.NewScanner(file)
+		for scanner.Scan() {
+			body += scanner.Text()
+		}
+		response = fmt.Sprintf("%s%s%s%d\r\n\r\n%s", Response200, ContentAppOctetStream, ContentLength, len(body), body)
+	default:
+		response = fmt.Sprintf("%s\r\n", Response404)
 	}
+
+	return response
 }
 
 func manageConnection(conn net.Conn) {
@@ -103,8 +109,9 @@ func manageConnection(conn net.Conn) {
 	}
 
 	response := createResponse(request)
-	fmt.Println(response)
 	fmt.Println([]byte(response))
+	fmt.Println(response)
+
 	conn.Write([]byte(response))
 	conn.Close()
 }
