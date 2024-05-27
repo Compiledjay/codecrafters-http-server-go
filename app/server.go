@@ -2,6 +2,8 @@ package main
 
 import (
 	"bufio"
+	"bytes"
+	"compress/gzip"
 	"fmt"
 	"net"
 	"os"
@@ -65,16 +67,27 @@ func createGetResponse(r *httpRequest) string {
 	case "echo":
 		splitReq := strings.SplitN(r.path, "/", 3)
 		headers := ""
+		gzipCompressed := false
 		if v, ok := r.headers["accept-encoding"]; ok {
 			headerValues := strings.Split(v, ", ")
 			for _, s := range headerValues {
 				switch s {
 				case "gzip":
 					headers += ContentEncoding + s + "\r\n"
+					gzipCompressed = true
 				}
 			}
 		}
+
 		body := splitReq[2]
+		if gzipCompressed {
+			var buf bytes.Buffer
+			gzipWriter := gzip.NewWriter(&buf)
+			gzipWriter.Write([]byte(body))
+			gzipWriter.Close()
+			body = buf.String()
+		}
+
 		headers += fmt.Sprintf("%s%s%d\r\n\r\n", ContentTextPlain, ContentLength, len(body))
 		response = fmt.Sprintf("%s%s%s", Response200, headers, body)
 	case "user-agent":
