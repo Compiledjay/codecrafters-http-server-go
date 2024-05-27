@@ -66,9 +66,12 @@ func createGetResponse(r *httpRequest) string {
 		splitReq := strings.SplitN(r.path, "/", 3)
 		headers := ""
 		if v, ok := r.headers["accept-encoding"]; ok {
-			switch s := strings.Trim(v, "\r\n"); s {
-			case "gzip":
-				headers += ContentEncoding + v + "\r\n"
+			headerValues := strings.Split(v, ", ")
+			for _, s := range headerValues {
+				switch s {
+				case "gzip":
+					headers += ContentEncoding + s + "\r\n"
+				}
 			}
 		}
 		body := splitReq[2]
