@@ -18,6 +18,7 @@ const (
 	ContentTextPlain      = "Content-Type: text/plain\r\n"
 	ContentAppOctetStream = "Content-Type: application/octet-stream\r\n"
 	ContentLength         = "Content-Length: "
+	ContentEncoding       = "Content-Encoding: "
 )
 
 type httpRequest struct {
@@ -44,7 +45,7 @@ func parseRequest(req string) (*httpRequest, error) {
 		headerField := strings.SplitN(header, ":", 2)
 		name := strings.Trim(headerField[0], " ")
 		value := strings.Trim(headerField[1], " ")
-		headers[strings.ToLower(name)] = value + "\r\n"
+		headers[strings.ToLower(name)] = value
 	}
 	body := lines[len(lines)-1]
 
@@ -57,21 +58,30 @@ func parseRequest(req string) (*httpRequest, error) {
 }
 
 func createGetResponse(r *httpRequest) string {
-	response := ""
+	var response string
 	switch p := strings.Split(r.path, "/")[1]; p {
 	case "":
 		response = fmt.Sprintf("%s\r\n", Response200)
 	case "echo":
 		splitReq := strings.SplitN(r.path, "/", 3)
+		headers := ""
+		if v, ok := r.headers["accept-encoding"]; ok {
+			switch s := strings.Trim(v, "\r\n"); s {
+			case "gzip":
+				headers += ContentEncoding + v + "\r\n"
+			}
+		}
 		body := splitReq[2]
-		response = fmt.Sprintf("%s%s%s%d\r\n\r\n%s", Response200, ContentTextPlain, ContentLength, len(body), body)
+		headers += fmt.Sprintf("%s%s%d\r\n\r\n", ContentTextPlain, ContentLength, len(body))
+		response = fmt.Sprintf("%s%s%s", Response200, headers, body)
 	case "user-agent":
 		body := r.headers["user-agent"]
 		body = strings.Trim(body, "\r\n")
-		response = fmt.Sprintf("%s%s%s%d\r\n\r\n%s", Response200, ContentTextPlain, ContentLength, len(body), body)
+		headers := fmt.Sprintf("%s%s%d\r\n\r\n", ContentTextPlain, ContentLength, len(body))
+		response = fmt.Sprintf("%s%s%s", Response200, headers, body)
 	case "files":
 		if len(os.Args) < 3 && os.Args[1] != "--directory" {
-			fmt.Println("insufficient arguments, usage: ./server.sh --directory <directory>")
+			fmt.Println("invalid arguments, usage: ./server.sh --directory <directory>")
 			response = fmt.Sprintf("%s\r\n", Response400)
 			break
 		}
@@ -91,8 +101,8 @@ func createGetResponse(r *httpRequest) string {
 		for scanner.Scan() {
 			body += scanner.Text()
 		}
-
-		response = fmt.Sprintf("%s%s%s%d\r\n\r\n%s", Response200, ContentAppOctetStream, ContentLength, len(body), body)
+		headers := fmt.Sprintf("%s%s%d\r\n\r\n", ContentAppOctetStream, ContentLength, len(body))
+		response = fmt.Sprintf("%s%s%s", Response200, headers, body)
 	default:
 		fmt.Println("unrecognized path: ", r.path)
 		response = fmt.Sprintf("%s\r\n", Response404)
@@ -102,11 +112,11 @@ func createGetResponse(r *httpRequest) string {
 }
 
 func createPostResponse(r *httpRequest) string {
-	response := ""
+	var response string
 	switch p := strings.Split(r.path, "/")[1]; p {
 	case "files":
 		if len(os.Args) < 3 && os.Args[1] != "--directory" {
-			fmt.Println("insufficient arguments, usage: ./server.sh --directory <directory>")
+			fmt.Println("invalid arguments, usage: ./server.sh --directory <directory>")
 			response = fmt.Sprintf("%s\r\n", Response400)
 			break
 		}
@@ -127,8 +137,8 @@ func createPostResponse(r *httpRequest) string {
 			response = fmt.Sprintf("%s\r\n", Response400)
 			break
 		}
-
-		response = fmt.Sprintf("%s%s%s%d\r\n\r\n%s", Response201, ContentTextPlain, ContentLength, len(r.body), r.body)
+		headers := fmt.Sprintf("%s%s%d\r\n\r\n", ContentAppOctetStream, ContentLength, len(r.body))
+		response = fmt.Sprintf("%s%s%s", Response201, headers, r.body)
 	default:
 		fmt.Println("unrecognized path: ", r.path)
 		response = fmt.Sprintf("%s\r\n", Response404)
